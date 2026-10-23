@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CramCoach</title>
+<meta name="description" content="CramCoach turns your notes into a study pack and quiz in seconds, powered by Gemini and prompt engineering.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f1e7; --panel: #fffdf8; --ink: #1d1b16; --muted: #6b6457; --line: #e4dccb;
+    --accent: #e4572e; --accent-ink: #ffffff; --accent-soft: #fde6dc;
+    --good: #23704a; --good-bg: #e2f3e8; --bad: #b3261e; --bad-bg: #fbe5e3;
+    --chip: #f0e8d8; --code: #f3ede1;
+    --radius: 16px; --shadow: 0 1px 0 rgba(0,0,0,.04), 0 8px 24px -12px rgba(60,40,10,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15130f; --panel: #1f1c16; --ink: #f3eee3; --muted: #a59d8d; --line: #37322a;
+      --accent: #ff7a50; --accent-ink: #1d1b16; --accent-soft: #3a2419;
+      --good: #74d6a0; --good-bg: #1c3226; --bad: #ff8f86; --bad-bg: #3b1f1c;
+      --chip: #2b271f; --code: #191712;
+      --shadow: 0 1px 0 rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.55 "DM Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; line-height: 1.15; margin: 0; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  a { color: var(--accent); }
+
+  header.top {
+    max-width: 1180px; margin: 0 auto; padding: 22px 16px 8px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 44px; height: 44px; border-radius: 12px; background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center; font: 800 22px "Fraunces", serif; transform: rotate(-6deg);
+  }
+  .brand h1 { font-size: 28px; font-weight: 800; letter-spacing: -.01em; }
+  .brand p { margin: 0; color: var(--muted); font-size: 14px; }
+  .settings-btn {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 8px 14px;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 14px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .dot.ok { background: var(--good); }
+
+  main {
+    max-width: 1180px; margin: 0 auto; padding: 12px 16px 48px;
+    display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 20px; align-items: start;
+  }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .input-card { padding: 20px; position: sticky; top: 16px; }
+  @media (max-width: 860px) { .input-card { position: static; } }
+  label.field { display: block; font-weight: 700; font-size: 14px; margin: 14px 0 6px; }
+  label.field:first-child { margin-top: 0; }
+  .hint { color: var(--muted); font-size: 13px; font-weight: 400; }
+  textarea, input[type=text], input[type=password], select {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; outline: none;
+  }
+  textarea { min-height: 170px; resize: vertical; }
+  textarea:focus, input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--chip); border-radius: 999px; padding: 5px 11px; font-size: 13px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip:disabled { opacity: .45; cursor: not-allowed; }
+  .primary {
+    width: 100%; margin-top: 18px; border: 0; border-radius: 12px; padding: 13px 16px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 16px;
+    transition: transform .08s ease, filter .15s;
+  }
+  .primary:hover { filter: brightness(1.05); }
+  .primary:active { transform: translateY(1px); }
+  .primary:disabled { opacity: .55; cursor: wait; }
+  .counter { text-align: right; font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .output { display: grid; gap: 16px; min-width: 0; }
+  .empty { padding: 40px 28px; text-align: center; }
+  .empty h2 { font-size: 30px; margin-bottom: 8px; }
+  .empty p { color: var(--muted); max-width: 480px; margin: 0 auto; }
+  .steps { display: flex; justify-content: center; gap: 22px; margin-top: 24px; flex-wrap: wrap; color: var(--muted); font-size: 14px; }
+  .steps b { display: block; font: 800 24px "Fraunces", serif; color: var(--accent); }
+
+  .section { padding: 20px 22px; }
+  .section h3 { font-size: 20px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tag { font: 700 11px "DM Sans", sans-serif; letter-spacing: .06em; text-transform: uppercase; background: var(--accent-soft); color: var(--accent); padding: 3px 8px; border-radius: 999px; }
+  .pack-title { font-size: 32px; font-weight: 800; letter-spacing: -.01em; }
+  .summary { margin: 10px 0 0; }
+
+  .concepts { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .flash {
+    min-height: 112px; border: 1px solid var(--line); background: var(--bg); border-radius: 12px; padding: 14px;
+    cursor: pointer; text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  }
+  .flash .term { font-weight: 700; }
+  .flash .def { display: none; font-size: 14px; color: var(--muted); }
+  .flash .tap { font-size: 12px; color: var(--muted); }
+  .flash.flipped { background: var(--accent-soft); border-color: var(--accent); }
+  .flash.flipped .def { display: block; color: var(--ink); }
+  .flash.flipped .tap { display: none; }
+
+  .trick { background: var(--accent-soft); border-left: 4px solid var(--accent); padding: 14px 16px; border-radius: 0 12px 12px 0; }
+
+  .score { font: 700 14px "DM Sans", sans-serif; color: var(--muted); margin-left: auto; }
+  .q { padding: 16px 0; border-top: 1px solid var(--line); }
+  .q:first-of-type { border-top: 0; }
+  .q-text { font-weight: 700; margin-bottom: 10px; }
+  .opts { display: grid; gap: 8px; }
+  .opt {
+    text-align: left; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 12px; cursor: pointer;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .opt:hover:not(:disabled) { border-color: var(--accent); }
+  .opt:disabled { cursor: default; }
+  .opt .letter { font-weight: 700; color: var(--muted); min-width: 18px; }
+  .opt.correct { background: var(--good-bg); border-color: var(--good); }
+  .opt.correct .letter { color: var(--good); }
+  .opt.wrong { background: var(--bad-bg); border-color: var(--bad); }
+  .opt.wrong .letter { color: var(--bad); }
+  .explain { margin-top: 10px; font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--chip); }
+  .explain strong.ok { color: var(--good); }
+  .explain strong.no { color: var(--bad); }
+  .final { margin-top: 14px; padding: 14px 16px; border-radius: 12px; background: var(--chip); font-weight: 700; }
+
+  .refine-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .refine-input { display: flex; gap: 8px; }
+  .refine-input input { flex: 1; min-width: 0; }
+  .ghost { border: 1px solid var(--accent); color: var(--accent); background: transparent; border-radius: 12px; padding: 10px 14px; cursor: pointer; font-weight: 700; white-space: nowrap; }
+  .ghost:disabled { opacity: .5; cursor: wait; }
+
+  details.inspector summary { cursor: pointer; font: 600 20px "Fraunces", serif; list-style: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  details.inspector summary::-webkit-details-marker { display: none; }
+  details.inspector summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+  details[open].inspector summary::before { transform: rotate(90deg); }
+  .pattern { margin-top: 16px; }
+  .pattern h4 { margin: 0 0 4px; font-size: 15px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pattern p { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+  pre {
+    background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 0;
+    font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word;
+    max-height: 280px; overflow: auto;
+  }
+
+  .loading { padding: 32px; text-align: center; color: var(--muted); }
+  .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); margin: 0 auto 12px; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { padding: 16px 18px; border-color: var(--bad); background: var(--bad-bg); color: var(--ink); }
+  .error strong { color: var(--bad); }
+  .version { font: 700 12px "DM Sans", sans-serif; color: var(--muted); }
+
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--ink); padding: 22px; width: min(460px, calc(100vw - 32px)); box-shadow: var(--shadow); }
+  dialog::backdrop { background: rgba(20,15,5,.45); }
+  dialog h2 { font-size: 24px; margin-bottom: 6px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .dialog-actions button { border-radius: 10px; padding: 9px 16px; cursor: pointer; font-weight: 700; }
+  .btn-plain { border: 1px solid var(--line); background: transparent; }
+  .btn-solid { border: 0; background: var(--accent); color: var(--accent-ink); }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 0 16px 32px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">C</div>
+    <div>
+      <h1>CramCoach</h1>
+      <p>Your notes in. A study pack and quiz out. Seconds, not hours.</p>
+    </div>
+  </div>
+  <button class="settings-btn" id="settingsBtn" type="button">
+    <span class="dot" id="keyDot"></span><span id="keyLabel">Add API key</span>
+  </button>
+</header>
+
+<main>
+  <!-- INPUT PANEL -->
+  <section class="card input-card" aria-label="Study material">
+    <label class="field" for="material">What are you studying? <span class="hint">Paste notes or type a topic</span></label>
+    <textarea id="material" maxlength="20000" placeholder="e.g. paste your lecture notes, a textbook section, or just type &quot;How TCP handshakes work&quot;"></textarea>
+    <div class="counter"><span id="charCount">0</span> / 20,000</div>
+    <div class="examples" aria-label="Example topics">
+      <button class="chip" type="button" data-example="bigo">Big-O notation</button>
+      <button class="chip" type="button" data-example="vaccines">How vaccines work</button>
+      <button class="chip" type="button" data-example="french">French Revolution</button>
+    </div>
+
+    <div class="row">
+      <div>
+        <label class="field" for="level">Your level</label>
+        <select id="level">
+          <option>High school</option>
+          <option selected>Intro college</option>
+          <option>Advanced college</option>
+          <option>Total beginner</option>
+        </select>
+      </div>
+      <div>
+        <label class="field" for="count">Quiz length</label>
+        <select id="count">
+          <option value="3">3 questions</option>
+          <option value="5" selected>5 questions</option>
+          <option value="8">8 questions</option>
+        </select>
+      </div>
+    </div>
+
+    <label class="field" for="goal">Goal <span class="hint">(optional)</span></label>
+    <input type="text" id="goal" maxlength="200" placeholder="e.g. midterm tomorrow, focus on definitions">
+
+    <button class="primary" id="generateBtn" type="button">Build my study pack →</button>
+  </section>
+
+  <!-- OUTPUT -->
+  <section class="output" id="output" aria-live="polite">
+    <div class="card empty">
+      <h2>Exam tomorrow? Let's go.</h2>
+      <p>CramCoach reads your material, pulls out what matters, and quizzes you on it. Then it adapts to what you got wrong.</p>
+      <div class="steps">
+        <div><b>1</b>Paste notes</div>
+        <div><b>2</b>Study the pack</div>
+        <div><b>3</b>Take the quiz</div>
+        <div><b>4</b>Drill your misses</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>Built for CS4680 Prompt Engineering · Powered by the Gemini API · Your API key stays in your browser.</footer>
+
+<!-- SETTINGS DIALOG -->
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <h2>Gemini API key</h2>
+    <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. It's saved only in this browser and sent only to Google.</p>
+    <label class="field" for="apiKey">API key</label>
+    <input type="password" id="apiKey" autocomplete="off" placeholder="Paste your key">
+    <label class="field" for="model">Model</label>
+    <select id="model">
+      <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (fastest)</option>
+      <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+      <option value="gemini-3.8-flash">gemini-3.8-flash (smartest)</option>
+      <option value="gemini-2.5-flash">gemini-2.5-flash (older accounts)</option>
+    </select>
+    <div class="dialog-actions">
+      <button class="btn-plain" value="cancel" type="submit" formnovalidate>Cancel</button>
+      <button class="btn-solid" value="save" type="submit" id="saveKey">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* =====================================================================
+   PROMPT ENGINEERING LAYER
+   Four patterns are combined here. Each one is labeled so the
+   Prompt Inspector in the UI can show them during the demo.
+   ===================================================================== */
+
+// PATTERN 1: PERSONA
+// Sent as the system instruction so it shapes every turn of the conversation.
+const SYSTEM_PROMPT = `You are CramCoach, an upbeat, patient tutor who has helped thousands of students pass exams the night before. You explain like a great teaching assistant: clear, concrete, no fluff, and always accurate.
+
+Your rules:
+1. Teach only well-established facts. If the student's notes contain a mistake, gently correct it in the summary.
+2. Match depth and vocabulary to the student's stated level.
+3. Quiz questions test understanding, not trivia. Prefer "why" and "what happens if" over "what year" or "who said".
+4. Every question has exactly 4 options and exactly 1 correct answer. Wrong options must be believable misconceptions a real student might hold, never jokes.
+5. Spread the correct answer across positions 0, 1, 2 and 3. Do not always use the same position.
+6. Each explanation says why the right answer is right AND why the most tempting wrong answer is wrong.
+7. Reply with JSON only, exactly matching the requested format. No markdown fences, no extra commentary.
+8. If the material is empty, gibberish, or not something a student could study, reply with {"error": "<one friendly sentence explaining what to paste instead>"}.`;
+
+// PATTERN 2: TEMPLATE (output schema)
+// A fixed JSON shape so the app can reliably turn the reply into UI.
+const OUTPUT_TEMPLATE = `{
+  "title": "short title for this topic",
+  "summary": "3-5 sentence plain-language overview",
+  "key_concepts": [
+    { "term": "concept name", "definition": "one or two sentence definition" }
+  ],
+  "memory_trick": "one mnemonic, analogy, or trick to remember the hardest idea",
+  "quiz": [
+    {
+      "question": "question text",
+      "options": ["A", "B", "C", "D"],
+      "answer_index": 0,
+      "explanation": "why the answer is right and why the tempting wrong one is wrong"
+    }
+  ]
+}`;
+
+function buildRequest({ material, level, count, goal }) {
+  const kind = material.split(/\s+/).length < 12 ? "TOPIC" : "NOTES";
+  return `STUDENT LEVEL: ${level}
+QUIZ LENGTH: exactly ${count} questions
+KEY CONCEPTS: 4 to 6
+${goal ? `STUDENT GOAL: ${goal}\n` : ""}MATERIAL TYPE: ${kind}
+MATERIAL:
+"""
+${material}
+"""
+
+Create a study pack for this material using exactly this JSON format:
+${OUTPUT_TEMPLATE}`;
+}
+
+// PATTERN 3: FEW-SHOT EXAMPLE
+// One worked example (input -> ideal output) sent before the real request.
+// It shows the model the quality bar: misconception-based distractors,
+// varied answer positions, and two-part explanations.
+const FEW_SHOT_USER = buildRequest({
+  material: "Photosynthesis",
+  level: "High school",
+  count: 2,
+  goal: ""
+});
+const FEW_SHOT_MODEL = JSON.stringify({
+  title: "Photosynthesis",
+  summary: "Photosynthesis is how plants, algae and some bacteria turn light energy into chemical energy stored in sugar. It happens mainly in chloroplasts, using carbon dioxide from the air and water from the soil. The light-dependent reactions capture energy and release oxygen; the Calvin cycle uses that energy to build glucose. Nearly all food chains on Earth depend on it.",
+  key_concepts: [
+    { term: "Chloroplast", definition: "The organelle where photosynthesis happens; it contains the green pigment chlorophyll." },
+    { term: "Light-dependent reactions", definition: "Reactions in the thylakoid membranes that use light to make ATP and NADPH and split water, releasing O2." },
+    { term: "Calvin cycle", definition: "Reactions in the stroma that use ATP and NADPH to fix CO2 into sugar." },
+    { term: "Chlorophyll", definition: "Pigment that absorbs mostly red and blue light and reflects green." }
+  ],
+  memory_trick: "Light reactions make the batteries (ATP, NADPH); the Calvin cycle spends them to build sugar.",
+  quiz: [
+    {
+      question: "Where does the oxygen released by photosynthesis come from?",
+      options: ["Carbon dioxide", "Glucose", "Water", "Chlorophyll"],
+      answer_index: 2,
+      explanation: "Oxygen comes from splitting water in the light-dependent reactions. Many students pick carbon dioxide because it contains oxygen, but its atoms end up in the sugar, not in the released O2."
+    },
+    {
+      question: "A plant is kept in bright light but with no CO2. What stops first?",
+      options: ["The Calvin cycle", "Light absorption by chlorophyll", "Water uptake by roots", "Nothing changes"],
+      answer_index: 0,
+      explanation: "The Calvin cycle needs CO2 to build sugar, so it stalls. Light absorption can still happen, which is why 'light absorption' is tempting, but without CO2 there is nothing to fix into sugar."
+    }
+  ]
+});
+
+// PATTERN 4: ITERATIVE REFINEMENT
+// After the first pack, the student's feedback plus their actual quiz
+// mistakes are added to the same conversation so the model revises
+// its own previous answer instead of starting over.
+function buildRefinement(instruction, missed, scoreLine) {
+  let missedText = "None yet.";
+  if (missed.length) {
+    missedText = missed.map((m, i) =>
+      `${i + 1}. Q: ${m.question}\n   Student chose: ${m.chosen}\n   Correct: ${m.correct}`).join("\n");
+  }
+  return `REFINEMENT REQUEST
+The student read your study pack and wants this change: ${instruction}
+
+Their quiz results: ${scoreLine}
+Questions they got wrong:
+${missedText}
+
+Revise the study pack to meet the request. Keep the same student level and the exact same JSON format. Write completely new quiz questions (do not repeat earlier ones). If they missed questions, make sure the new summary and concepts clear up those specific misunderstandings.`;
+}
+
+const REFINEMENTS = {
+  harder:  "Make it harder. Use more advanced detail and trickier, multi-step questions.",
+  simpler: "Explain it more simply, with everyday analogies, as if I'm seeing this for the first time.",
+  missed:  "Drill what I got wrong. Focus the summary, concepts and every new question on the ideas behind the questions I missed.",
+  examples:"Add more real-world examples and make the questions scenario-based."
+};
+
+/* =====================================================================
+   EXAMPLE MATERIAL (for quick demos)
+   ===================================================================== */
+const EXAMPLES = {
+  bigo: "Big-O notation describes how an algorithm's running time or memory grows as the input size n grows. We drop constants and lower-order terms, so 3n^2 + 5n + 2 is O(n^2). Common classes from fastest to slowest: O(1) constant, O(log n) logarithmic (binary search), O(n) linear (scanning a list), O(n log n) (merge sort), O(n^2) quadratic (nested loops, bubble sort), O(2^n) exponential (naive recursive Fibonacci). Big-O is an upper bound; Big-Omega is a lower bound and Big-Theta is a tight bound. Best, average and worst case can differ: quicksort is O(n log n) on average but O(n^2) in the worst case.",
+  vaccines: "How vaccines work",
+  french: "Causes and key events of the French Revolution"
+};
+
+/* =====================================================================
+   APP STATE + HELPERS
+   ===================================================================== */
+const $ = (s) => document.querySelector(s);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} }
+};
+
+let history = [];      // conversation turns sent to Gemini (enables refinement)
+let pack = null;       // current study pack
+let answers = [];      // per-question: { chosen, correct }
+let version = 0;
+let lastPrompt = "";
+let lastRaw = "";
+let busy = false;
+const EMPTY_STATE = document.querySelector("#output").innerHTML;
+
+function el(tag, attrs = {}, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "onclick") n.addEventListener("click", v);
+    else if (v !== undefined && v !== null) n.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c === null || c === undefined || c === false) continue;
+    n.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return n;
+}
+
+function getKey() { return (store.get("cramcoach_key") || "").trim(); }
+function getModel() { return store.get("cramcoach_model") || "gemini-3.5-flash-lite"; }
+
+function refreshKeyBadge() {
+  const ok = !!getKey();
+  $("#keyDot").classList.toggle("ok", ok);
+  $("#keyLabel").textContent = ok ? `Key saved · ${getModel()}` : "Add API key";
+}
+
+/* =====================================================================
+   GEMINI API
+   ===================================================================== */
+async function callGemini(contents) {
+  const key = getKey();
+  if (!key) throw new Error("NO_KEY");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getModel())}:generateContent?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents,
+      generationConfig: { temperature: 0.7, responseMimeType: "application/json" }
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data?.error?.message || res.statusText;
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const text = parts.filter(p => !p.thought && typeof p.text === "string").map(p => p.text).join("");
+  if (!text) throw new Error("The model returned an empty response. Try again.");
+  return text;
+}
+
+function parsePack(text) {
+  let t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  const start = t.indexOf("{"), end = t.lastIndexOf("}");
+  if (start !== -1 && end !== -1) t = t.slice(start, end + 1);
+  const obj = JSON.parse(t);
+  if (obj.error) return obj;
+  const quiz = (Array.isArray(obj.quiz) ? obj.quiz : []).filter(q =>
+    q && typeof q.question === "string" && Array.isArray(q.options) && q.options.length >= 2 &&
+    Number.isInteger(q.answer_index) && q.answer_index >= 0 && q.answer_index < q.options.length);
+  return {
+    title: String(obj.title || "Study pack"),
+    summary: String(obj.summary || ""),
+    key_concepts: (Array.isArray(obj.key_concepts) ? obj.key_concepts : []).filter(c => c && c.term),
+    memory_trick: obj.memory_trick ? String(obj.memory_trick) : "",
+    quiz
+  };
+}
+
+function friendlyError(e) {
+  if (e.message === "NO_KEY") return "Add your Gemini API key first (top-right button).";
+  if (e.status === 400 && /key/i.test(e.message)) return "That API key was rejected. Double-check it in settings.";
+  if (e.status === 403) return "This key doesn't have access to the Gemini API. Make a new key at aistudio.google.com/apikey.";
+  if (e.status === 404) return `The model "${getModel()}" isn't available to your key. Pick a different model in settings.`;
+  if (e.status === 429) return "Rate limit hit (free tier). Wait about a minute and try again, or switch models in settings.";
+  if (e instanceof SyntaxError) return "The AI's reply wasn't valid JSON this time. Hit the button again.";
+  if (e instanceof TypeError) return "Couldn't reach Google's servers. Check your internet connection.";
+  return e.message || "Something went wrong.";
+}
+
+/* =====================================================================
+   FLOW
+   ===================================================================== */
+const LOADING_LINES = ["Reading your notes…", "Finding what's on the test…", "Writing tricky wrong answers…", "Checking the explanations…"];
+
+function showLoading(label) {
+  const line = el("p", {}, label || LOADING_LINES[0]);
+  const box = el("div", { class: "card loading" }, el("div", { class: "spinner" }), line);
+  let i = 0;
+  const timer = setInterval(() => { i = (i + 1) % LOADING_LINES.length; line.textContent = LOADING_LINES[i]; }, 1600);
+  box._stop = () => clearInterval(timer);
+  return box;
+}
+
+function setBusy(b) {
+  busy = b;
+  $("#generateBtn").disabled = b;
+  $("#generateBtn").textContent = b ? "Working…" : "Build my study pack →";
+  document.querySelectorAll(".refine-btn").forEach(x => x.disabled = b || (x.dataset.kind === "missed" && !missedList().length));
+}
+
+async function run(contents, loadingLabel, onError) {
+  if (busy) return;
+  if (!getKey()) { openSettings(); return; }
+  setBusy(true);
+  const loader = showLoading(loadingLabel);
+  const out = $("#output");
+  if (!pack) out.replaceChildren(loader); else out.prepend(loader);
+  loader.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  try {
+    const raw = await callGemini(contents);
+    lastRaw = raw;
+    const result = parsePack(raw);
+    if (result.error) throw new Error(result.error);
+    history = [...contents, { role: "model", parts: [{ text: raw }] }];
+    pack = result;
+    answers = result.quiz.map(() => null);
+    version += 1;
+    render();
+    window.scrollTo({ top: out.offsetTop - 12, behavior: "smooth" });
+  } catch (e) {
+    loader._stop(); loader.remove();
+    if (onError) onError();
+    showError(friendlyError(e));
+  } finally {
+    loader._stop();
+    setBusy(false);
+  }
+}
+
+function generate() {
+  const material = $("#material").value.trim();
+  if (!material) { $("#material").focus(); showError("Paste some notes or type a topic first."); return; }
+  const userPrompt = buildRequest({
+    material, level: $("#level").value, count: Number($("#count").value), goal: $("#goal").value.trim()
+  });
+  lastPrompt = userPrompt;
+  version = 0;
+  const contents = [
+    { role: "user", parts: [{ text: FEW_SHOT_USER }] },
+    { role: "model", parts: [{ text: FEW_SHOT_MODEL }] },
+    { role: "user", parts: [{ text: userPrompt }] }
+  ];
+  const prevPack = pack;
+  pack = null;
+  run(contents, "Reading your notes…", () => {
+    pack = prevPack;
+    if (pack) render(); else $("#output").innerHTML = EMPTY_STATE;
+  });
+}
+
+function missedList() {
+  if (!pack) return [];
+  return pack.quiz.map((q, i) => ({ q, a: answers[i] }))
+    .filter(x => x.a && !x.a.correct)
+    .map(x => ({ question: x.q.question, chosen: x.q.options[x.a.chosen], correct: x.q.options[x.q.answer_index] }));
+}
+
+function scoreLine() {
+  const done = answers.filter(Boolean);
+  if (!done.length) return "The student has not answered any questions yet.";
+  return `${done.filter(a => a.correct).length} correct out of ${done.length} answered (of ${pack.quiz.length} total).`;
+}
+
+function refine(instruction) {
+  if (!pack || !instruction) return;
+  const prompt = buildRefinement(instruction, missedList(), scoreLine());
+  lastPrompt = prompt;
+  run([...history, { role: "user", parts: [{ text: prompt }] }], "Revising your study pack…");
+}
+
+/* =====================================================================
+   RENDERING
+   ===================================================================== */
+function showError(msg) {
+  const out = $("#output");
+  out.querySelectorAll(".error").forEach(n => n.remove());
+  const box = el("div", { class: "card section error", role: "alert" }, el("strong", {}, "Hmm. "), msg);
+  out.prepend(box);
+  setTimeout(() => box.remove(), 9000);
+}
+
+function render() {
+  const out = $("#output");
+  out.replaceChildren(
+    renderHeader(), renderConcepts(), pack.memory_trick ? renderTrick() : null,
+    renderQuiz(), renderRefine(), renderInspector()
+  );
+  setBusy(false);
+}
+
+function renderHeader() {
+  return el("div", { class: "card section" },
+    el("div", { class: "version" }, version > 1 ? `Version ${version} · refined` : "Version 1"),
+    el("h2", { class: "pack-title" }, pack.title),
+    el("p", { class: "summary" }, pack.summary));
+}
+
+function renderConcepts() {
+  return el("div", { class: "card section" },
+    el("h3", {}, "Key concepts", el("span", { class: "tag" }, "Tap to flip")),
+    el("div", { class: "concepts" }, pack.key_concepts.map(c => {
+      const card = el("button", { class: "flash", type: "button", "aria-expanded": "false" },
+        el("span", { class: "term" }, c.term),
+        el("span", { class: "def" }, c.definition || ""),
+        el("span", { class: "tap" }, "Tap to reveal"));
+      card.addEventListener("click", () => {
+        card.classList.toggle("flipped");
+        card.setAttribute("aria-expanded", card.classList.contains("flipped"));
+      });
+      return card;
+    })));
+}
+
+function renderTrick() {
+  return el("div", { class: "card section" },
+    el("h3", {}, "Memory trick"),
+    el("div", { class: "trick" }, pack.memory_trick));
+}
+
+function renderQuiz() {
+  const score = el("span", { class: "score" });
+  const final = el("div", { class: "final", hidden: "" });
+  const wrap = el("div", { class: "card section" }, el("h3", {}, "Quiz", score));
+
+  const updateScore = () => {
+    const done = answers.filter(Boolean);
+    const right = done.filter(a => a.correct).length;
+    score.textContent = done.length ? `${right} / ${done.length} correct` : `${pack.quiz.length} questions`;
+    if (done.length === pack.quiz.length) {
+      const pct = Math.round(right / pack.quiz.length * 100);
+      final.hidden = false;
+      final.textContent = pct === 100 ? `Perfect score (${pct}%). Try "Make it harder" below.`
+        : pct >= 70 ? `${pct}%. Solid. Hit "Drill what I missed" to close the gaps.`
+        : `${pct}%. No stress — hit "Drill what I missed" and CramCoach will reteach those ideas.`;
+    }
+    document.querySelectorAll(".refine-btn[data-kind=missed]").forEach(b => b.disabled = busy || !missedList().length);
+  };
+
+  pack.quiz.forEach((q, qi) => {
+    const explain = el("div", { class: "explain", hidden: "" });
+    const opts = el("div", { class: "opts" });
+    const buttons = q.options.map((opt, oi) => {
+      const b = el("button", { class: "opt", type: "button" },
+        el("span", { class: "letter" }, "ABCDEFGH"[oi]), el("span", {}, opt));
+      b.addEventListener("click", () => {
+        if (answers[qi]) return;
+        const correct = oi === q.answer_index;
+        answers[qi] = { chosen: oi, correct };
+        buttons.forEach((bb, j) => {
+          bb.disabled = true;
+          if (j === q.answer_index) bb.classList.add("correct");
+          else if (j === oi) bb.classList.add("wrong");
+        });
+        explain.hidden = false;
+        explain.replaceChildren(
+          el("strong", { class: correct ? "ok" : "no" }, correct ? "Correct! " : "Not quite. "),
+          q.explanation || "");
+        updateScore();
+      });
+      return b;
+    });
+    opts.append(...buttons);
+    wrap.append(el("div", { class: "q" },
+      el("div", { class: "q-text" }, `${qi + 1}. ${q.question}`), opts, explain));
+  });
+  wrap.append(final);
+  updateScore();
+  return wrap;
+}
+
+function renderRefine() {
+  const input = el("input", { type: "text", placeholder: "Or tell CramCoach what to change…", maxlength: "300", "aria-label": "Custom refinement" });
+  const go = el("button", { class: "ghost refine-btn", type: "button" }, "Refine");
+  const submit = () => { const v = input.value.trim(); if (v) { refine(v); input.value = ""; } };
+  go.addEventListener("click", submit);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+
+  const chip = (kind, label) => {
+    const b = el("button", { class: "chip refine-btn", type: "button", "data-kind": kind }, label);
+    b.addEventListener("click", () => refine(REFINEMENTS[kind]));
+    return b;
+  };
+  return el("div", { class: "card section" },
+    el("h3", {}, "Refine it", el("span", { class: "tag" }, "Iterative refinement")),
+    el("div", { class: "refine-row" },
+      chip("missed", "🎯 Drill what I missed"), chip("harder", "🔥 Make it harder"),
+      chip("simpler", "🧸 Explain simpler"), chip("examples", "🌍 Real-world examples")),
+    el("div", { class: "refine-input" }, input, go));
+}
+
+function renderInspector() {
+  const block = (title, tag, desc, text) => el("div", { class: "pattern" },
+    el("h4", {}, title, el("span", { class: "tag" }, tag)), el("p", {}, desc), el("pre", {}, text));
+  return el("details", { class: "card section inspector" },
+    el("summary", {}, "Prompt Inspector", el("span", { class: "tag" }, "See the prompt engineering")),
+    block("System instruction", "Persona", "Sets CramCoach's role, tone and teaching rules for every turn.", SYSTEM_PROMPT),
+    block("Worked example", "Few-shot", "One ideal input/output pair sent before your request to show the quality bar.", JSON.stringify(JSON.parse(FEW_SHOT_MODEL), null, 2)),
+    block(version > 1 ? "Latest refinement prompt" : "Your request", version > 1 ? "Iterative refinement" : "Template",
+      version > 1 ? "Your feedback plus your actual wrong answers, added to the same conversation so the model revises its own work."
+                  : "Your material wrapped in a structured template with an exact JSON output schema.", lastPrompt),
+    block("Raw model response", "JSON", `Model: ${getModel()} · Conversation turns: ${history.length}`, prettyJSON(lastRaw)));
+}
+
+function prettyJSON(t) { try { return JSON.stringify(JSON.parse(t), null, 2); } catch { return t; } }
+
+/* =====================================================================
+   SETTINGS + WIRING
+   ===================================================================== */
+function openSettings() {
+  $("#apiKey").value = getKey();
+  $("#model").value = getModel();
+  $("#settings").showModal();
+  setTimeout(() => $("#apiKey").focus(), 50);
+}
+
+$("#settingsBtn").addEventListener("click", openSettings);
+$("#settings").addEventListener("close", () => {
+  if ($("#settings").returnValue === "save") {
+    store.set("cramcoach_key", $("#apiKey").value.trim());
+    store.set("cramcoach_model", $("#model").value);
+    refreshKeyBadge();
+  }
+});
+$("#generateBtn").addEventListener("click", generate);
+$("#material").addEventListener("input", () => { $("#charCount").textContent = $("#material").value.length.toLocaleString(); });
+$("#material").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) generate(); });
+document.querySelectorAll("[data-example]").forEach(b => b.addEventListener("click", () => {
+  $("#material").value = EXAMPLES[b.dataset.example];
+  $("#material").dispatchEvent(new Event("input"));
+}));
+refreshKeyBadge();
+</script>
+</body>
+</html>
