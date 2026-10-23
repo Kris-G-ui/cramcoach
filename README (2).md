@@ -99,4 +99,4 @@ Your key is stored only in your browser's local storage and sent only to Google'
 
 ## Author
 
-YOUR NAME · CS4680 Prompt Engineering
+Kris Greer · CS4680 Prompt Engineering
